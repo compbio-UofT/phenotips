@@ -19,6 +19,7 @@ package org.phenotips.data.test.ui;
 
 import org.phenotips.data.test.po.PatientRecordEditPage;
 import org.phenotips.data.test.po.PatientRecordViewPage;
+import org.phenotips.navigation.test.po.AdminPage;
 import org.phenotips.navigation.test.po.HomePage;
 
 import org.xwiki.test.ui.AbstractTest;
@@ -39,6 +40,7 @@ import org.junit.Test;
 public class PatientRecordTest extends AbstractTest
 {
     PatientRecordEditPage patientEdit;
+    AdminPage adminPage;
 
     @Rule
     public AuthenticationRule authenticationRule = new JDoeAuthenticationRule(getUtil(), getDriver(), true);
@@ -46,6 +48,10 @@ public class PatientRecordTest extends AbstractTest
     @Before
     public void setUp()
     {
+        // Enabling Obstetric history section of patient form
+        this.adminPage = AdminPage.gotoAdminPage().clickPatientFormStructure();
+        this.adminPage.enableObstetricHistoryForm();
+
         // Going to a new patient page
         this.patientEdit = HomePage.gotoPage().clickNewPatientRecord();
     }
@@ -146,7 +152,33 @@ public class PatientRecordTest extends AbstractTest
     }
 
     @Test
+    public void ObstetricHistoryTest(){
+
+        this.patientEdit.expandPrenatalAndPerinatalHistory();
+
+        this.patientEdit.setObstetricHistoryGravida("1");
+        this.patientEdit.setObstetricHistoryPara("2");
+        this.patientEdit.setObstetricHistoryTerm("3");
+        this.patientEdit.setObstetricHistoryPreTerm("4");
+        this.patientEdit.setObstetricHistorySab("5");
+        this.patientEdit.setObstetricHistoryTab("6");
+        this.patientEdit.setObstetricHistoryLiveBirths("7");
+
+        PatientRecordViewPage patientView  = this.patientEdit.clickSaveAndView();
+
+        Assert.assertEquals(patientView.getPrenatalAndPerinatalHistorySummary("fieldPregnancyHistoryGravida"), "1");
+        Assert.assertEquals(patientView.getPrenatalAndPerinatalHistorySummary("fieldPregnancyHistoryPara"), "2");
+        Assert.assertEquals(patientView.getPrenatalAndPerinatalHistorySummary("fieldPregnancyHistoryTerm"), "3");
+        Assert.assertEquals(patientView.getPrenatalAndPerinatalHistorySummary("fieldPregnancyHistoryPreTerm"), "4");
+        Assert.assertEquals(patientView.getPrenatalAndPerinatalHistorySummary("fieldPregnancyHistorySab"), "5");
+        Assert.assertEquals(patientView.getPrenatalAndPerinatalHistorySummary("fieldPregnancyHistoryTab"), "6");
+        Assert.assertEquals(patientView.getPrenatalAndPerinatalHistorySummary("fieldPregnancyHistoryLiveBirths"), "7");
+
+    }
+
+    @Test
     public void parentalAgeTest(){
+        this.patientEdit.expandPrenatalAndPerinatalHistory();
         this.patientEdit.setMaternalAgeAtEDD("25");
         this.patientEdit.setPaternalAgeAtEDD("27");
 
