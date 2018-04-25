@@ -28,9 +28,6 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * TODO: refactor on top of Entities model. Split/re-arrange functionality between Family (Entity), FamilyRepository
- * (EntityManager) and EntityGroupManager.
- *
  * @version $Id$
  * @since 1.4
  */
@@ -49,12 +46,16 @@ public interface Family extends PrimaryEntity
 
     /**
      * @return list of family members
+     * @deprecated use {@link PatientsInFamilyManager#getMembers(Family)}.
      */
+    @Deprecated
     List<Patient> getMembers();
 
     /**
      * @return list of family members ids
+     * @deprecated use {@link PatientsInFamilyManager#getMembers(Family)} and work with patients and not ids.
      */
+    @Deprecated
     List<String> getMembersIds();
 
     /**
@@ -66,7 +67,9 @@ public interface Family extends PrimaryEntity
     /**
      * @param patient check if the patient belongs to this family
      * @return true if a patient is a member of the family
+     * @deprecated user {@link PatientsInFamilyManager#isMember(Family, Patient)}.
      */
+    @Deprecated
     boolean isMember(Patient patient);
 
     /**

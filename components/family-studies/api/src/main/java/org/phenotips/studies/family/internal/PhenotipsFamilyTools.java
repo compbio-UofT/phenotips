@@ -23,6 +23,7 @@ import org.phenotips.security.authorization.AuthorizationService;
 import org.phenotips.studies.family.Family;
 import org.phenotips.studies.family.FamilyRepository;
 import org.phenotips.studies.family.FamilyTools;
+import org.phenotips.studies.family.PatientsInFamilyManager;
 import org.phenotips.studies.family.Pedigree;
 import org.phenotips.studies.family.exceptions.PTException;
 
@@ -49,6 +50,10 @@ import javax.inject.Singleton;
 @Singleton
 public class PhenotipsFamilyTools implements FamilyTools
 {
+    @Inject
+    @Named("Family:Patient")
+    private PatientsInFamilyManager pifManager;
+
     @Inject
     private FamilyRepository familyRepository;
 
@@ -155,7 +160,7 @@ public class PhenotipsFamilyTools implements FamilyTools
         }
 
         try {
-            this.familyRepository.removeMember(family, patient, currentUser);
+            this.pifManager.removeMember(family, patient);
         } catch (PTException ex) {
             return false;
         }
@@ -177,7 +182,7 @@ public class PhenotipsFamilyTools implements FamilyTools
     @Override
     public boolean forceRemoveAllMembers(Family family)
     {
-        return this.familyRepository.forceRemoveAllMembers(family, this.userManager.getCurrentUser());
+        return this.pifManager.forceRemoveAllMembers(family);
     }
 
     @Override
@@ -222,7 +227,7 @@ public class PhenotipsFamilyTools implements FamilyTools
     @Override
     public void setPedigree(Family family, Pedigree pedigree) throws PTException
     {
-        this.familyRepository.setPedigree(family, pedigree, this.userManager.getCurrentUser());
+        this.pifManager.setPedigree(family, pedigree);
     }
 
     @Override
