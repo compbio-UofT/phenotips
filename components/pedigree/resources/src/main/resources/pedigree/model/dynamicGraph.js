@@ -169,6 +169,18 @@ define([
             return order;
         },
 
+        allowManualNodeRepositionLeft: function( id )
+        {
+            var rank  = this.DG.ranks[id];
+            return (this._findOrderOfNeighbourPerson(this.DG.order, rank, this.DG.order.vOrder[id], -1) !== null);
+        },
+
+        allowManualNodeRepositionRight: function( id )
+        {
+            var rank  = this.DG.ranks[id];
+            return (this._findOrderOfNeighbourPerson(this.DG.order, rank, this.DG.order.vOrder[id], +1) !== null);
+        },
+
         // returns null if person has no twins
         getTwinGroupId: function( id )
         {
@@ -1895,6 +1907,32 @@ define([
             return {"new": newNodes, "removed": removedNodes, "unlinked": this._unlinkedMembers};
         },
 
+        // moves the given node to the left or right within the same rank
+        performNodeOrderChange: function(nodeID, moveAmount)
+        {
+            var rank = this.DG.ranks[nodeID];
+            var updatedOrder = this.DG.order.copy();
+
+            // move node 1 step at a time, as it simplifies the update logic and simplifies
+            // handling of special cases (e.g. change order of partners, change position of attached reltionship(s), etc.)
+            for (var i = 0; i < Math.abs(moveAmount); i++) {
+                updatedOrder = this._moveNodePastOnePersonWithinRank(updatedOrder, rank, nodeID, (moveAmount > 0) ? +1 : -1);
+                if (updatedOrder == null) {
+                    return null;
+                }
+            }
+
+            var suggestedLayout = { "ranks": this.DG.ranks.slice(),
+                                    "order": updatedOrder
+                                  };
+
+            if (this._initializeFromBaseGraphAndLayout(this.DG.GG, this.getProbandId(), suggestedLayout, null)) {
+                return {"moved": this._getAllNodes()};
+            }
+
+            return null;
+        },
+
         _initializeFromBaseGraphAndLayout: function (baseGraph, probandNodeID, suggestedLayout, unlinkedMembersData)
         {
             try {
@@ -1943,6 +1981,157 @@ define([
         },
 
         //=============================================================
+
+        // useOrder: use this order data instead of this.DG.order
+        // direction: +1 (right) or -1 (left)
+        _findOrderOfNeighbourPerson: function(useOrder, rank, fromOrder, direction) {
+            for (var i = fromOrder + direction; i >= 0 && i < useOrder.order[rank].length; i = i + direction) {
+                if (this.isPerson(useOrder.order[rank][i])) {
+                    return i;
+                }
+            }
+            return null;
+        },
+
+        // moveDirection: +1 (right) or -1 (left)
+        _moveNodePastOnePersonWithinRank: function (currentOrder, rank, nodeID, moveDirection)
+        {
+            var currentNodeOrder = currentOrder.vOrder[nodeID];
+            var nextPersonOrder = this._findOrderOfNeighbourPerson(currentOrder, rank, currentNodeOrder, moveDirection);
+            if (nextPersonOrder === null) {
+                return null;
+            }
+            var nextPersonID = currentOrder.order[rank][nextPersonOrder];
+
+            // for now handle two cases:
+            // 1) nearest person node in the direction of movement is a partner: swap order of the partners (keep relationship inbetween)
+            // 2) not a partner: move nodeID, shifting all orders in between by 1
+            if (Helpers.arrayContains(this.DG.GG.getAllPartners(nodeID), nextPersonID)) {
+                // switch partners: [a]-*---- ? ? ? ----[b] -> [b]-*---- ? ? ? ----[a]
+                currentOrder.exchange(rank, currentNodeOrder, nextPersonOrder);
+            } else {
+                // move node: [a] ? ? ? [b] -> [b] [a] ? ? ?
+                //
+                // a few special cases need to be considered to keep the layout nice:
+                //
+                //  special case 0: when node being moved past has twin(s). All twins should be handled
+                //                  as a single node for the purpose of moving stuff. This is case "0" because doing this before
+                //                  other heuristics simplifies implementation.
+                //
+                //  special case1: when there is nextPerson's relationship next to nextPerson in the direction of movement: ? ? *-[a] [b]
+                //                 => need to move past the relationship as well, e.g. instead of <<? ? *- [b] [a]>> do <<? ? [b] *-[a]>>
+                //
+                //  special case2a: when node being moved has one mor more relationship node(s) next to it (in the direction of movement)
+                //                  but not next to the other partner (which we know is the case here - that case is handled above by an exchange)
+                //                  => need to move it together with the node, e.g.:
+                //                  [b_partner] ? ? ? [a] *-[b]    -> [b_partner] ? ? ? *-[b] [a] instead of [b_partner] ? ? ? [b] [a] -*
+                //
+                //  possible case2b: when node being moved has a relationship node next to it (in the direction opposite of movement)
+                //                   but not next to the other partner => may want to move it together with the node, e.g.:
+                //                   [a] [b]-* ? ? ? [b_partner]    -> [b]-* [a] ? ? ? [b_partner] instead of [b] [a] -*- ? ? ? [b_partner]
+                //                   BUT: it may be ok to leave relationship "as is" in this case, as it minimizes overall node movement
+                //
+                //  special case 3: (extension of case 0, but easier to implement after all other heuristics)
+                //                  node being moved has twin(s), then all twins should be moved together.
+                //                  this can get difficult if many twins have partners, so only twins with no partners will be handled
+
+                // check case 0: the node being moved past other twins
+                var twinsOfNext = this.getAllTwinsSortedByOrder(nextPersonID);
+                if (!Helpers.arrayContains(twinsOfNext, nodeID) &&             // if moving past own twin no special actions will be taken
+                    this._allNodesNextToEachOther(twinsOfNext, currentOrder))  // if there are nodes between twins do nothing, too many possibilities
+                {
+                    if (twinsOfNext.length > 1) {
+                        nextPersonOrder = nextPersonOrder + moveDirection * (twinsOfNext.length - 1);
+                        nextPersonID    = currentOrder.order[rank][nextPersonOrder];
+                    }
+                }
+
+                // check case 1:
+                // TODO: decide whats the best thing to do and implement
+
+                // check case 2a: check all node between "currentNode" and "nextPerson", move all relationships which
+                // are atached to "currentNode" past "nextPerson", so that both "curentNode" and all its relationships
+                // appear together on the other side of "nextPerson"
+                var currentNodeRelationships = this.DG.GG.getAllRelationships(nodeID);
+                var numRelationshipsMoved = 0;
+                for (var inbetweenOrder = currentNodeOrder + moveDirection; inbetweenOrder != nextPersonOrder; inbetweenOrder += moveDirection) {
+                    var nextNode = currentOrder.order[rank][inbetweenOrder];
+                    if (Helpers.arrayContains(currentNodeRelationships, nextNode)) {
+                        currentOrder.move(rank, inbetweenOrder, (nextPersonOrder - inbetweenOrder + moveDirection*numRelationshipsMoved));
+                        // nextPerson has moved!
+                        nextPersonOrder = currentOrder.vOrder[nextPersonID];
+                        // re-start search from the node which is next to currentNode after te modification
+                        inbetweenOrder = currentNodeOrder;
+                        numRelationshipsMoved++;
+                    }
+                }
+
+                // check case 2b:
+                // -> not implemented on purpose (TODO: discuss)
+
+                // check case 3: the node being moved has twins, and it is not being exchanged with a twin
+                var needMoveTwins = false;
+                var twinsOfNode = this.getAllTwinsSortedByOrder(nodeID);
+                if (!Helpers.arrayContains(twinsOfNode, nextPersonID) &&       // if not moving past own twins
+                    this._allNodesNextToEachOther(twinsOfNode, currentOrder))  // all twins are currently adjacent to each other
+                {
+                    if (twinsOfNode.length > 1) {
+                        // check if any of the twins have a partner; if there is a partner => do nothing
+                        needMoveTwins = true;
+                        twinsOfNode.forEach(function(twinID) {
+                            if (twinID != nodeID && this.DG.GG.getAllPartners(twinID).length > 0) {
+                                needMoveTwins = false;
+                            }
+                        }.bind(this));
+                    }
+                }
+
+                // finally, move the mode by amount adjusted by special heuristics above
+                var moveAmount = (nextPersonOrder - currentNodeOrder);
+                currentOrder.move(rank, currentNodeOrder, moveAmount);
+
+                // case 3, part 2: move all the twins as well, if necessary. Thi sneeds to be done after the node itself is moved
+                //                 (the assumption is that this is only done if all twins are adjacent to each other)
+                if (needMoveTwins) {
+                    twinsOfNode.forEach(function(twinID) {
+                        if (twinID != nodeID) {
+                            var twinOrder = currentOrder.vOrder[twinID];
+                            currentOrder.move(rank, twinOrder, moveAmount);
+                        }
+                    });
+                }
+            }
+
+            return currentOrder;
+        },
+
+        // returns true if all nodes in the given list are adjacent to each other and on the same rank
+        _allNodesNextToEachOther: function(nodes, order)
+        {
+            if (nodes.length <= 1) {
+                return true;
+            }
+
+            var rank = this.DG.ranks[nodes[0]];
+            var nodeOrders = [];
+            for (var i = 0; i < nodes.length; i++) {
+                var nodeID = nodes[i];
+                if (this.DG.ranks[nodeID] != rank) {
+                    return false;
+                }
+                nodeOrders.push(order.vOrder[nodeID]);
+            }
+
+            var sortFunc = function(a,b){ a - b };
+            nodeOrders.sort( sortFunc );
+
+            for (var i = 1; i < nodeOrders.length; i++) {
+                if (nodeOrders[i] != nodeOrders[i-1] + 1) {
+                    return false;
+                }
+            }
+            return true;
+        },
 
         _insertVertex: function (type, properties, edgeWeights, inedge, outedge, insertRank, insertOrder)
         {
