@@ -371,6 +371,7 @@
    cancelButton.observe('click', function(event) {
      modalBox.closeDialog();
    });
+
    submitButton.observe('click', function(event) {
      if (studyAssignmentTool.hasClassName('edit')) {
        //if in edit mode, save form first, then submit

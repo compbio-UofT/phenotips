@@ -17,6 +17,8 @@
  */
 package org.phenotips.data.permissions;
 
+import org.phenotips.data.permissions.events.EntityRightsUpdatedEvent;
+import org.phenotips.data.permissions.events.EntityRightsUpdatedEvent.RightsUpdateEventType;
 import org.phenotips.entities.PrimaryEntity;
 
 import org.xwiki.component.annotation.Role;
@@ -24,6 +26,7 @@ import org.xwiki.stability.Unstable;
 
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.List;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -141,10 +144,19 @@ public interface EntityPermissionsManager
         @Nullable Visibility requiredVisibility);
 
     /**
-     * Fires a right update event to notify interested parties that some permissions have changed. The idea is to fire
+     * Fires a right update event to notify interested parties that ALL permissions have changed. The idea is to fire
      * only one event after a bunch of updates have been performed.
      *
      * @param entityId the {@link PrimaryEntity#getId() identifier} of the affected entity
      */
     void fireRightsUpdateEvent(@Nonnull String entityId);
+
+    /**
+     * Fires a {@link EntityRightsUpdatedEvent} to notify interested parties that some permissions have changed. The
+     * idea is to fire only one event after a particular update(s) has been performed.
+     *
+     * @param eventTypes the types of this event, a list of {@link RightsUpdateEventType}s
+     * @param entityId the {@link PrimaryEntity#getId() identifier} of the affected entity
+     */
+    void fireRightsUpdateEvent(@Nonnull List<RightsUpdateEventType> eventTypes, @Nonnull String entityId);
 }

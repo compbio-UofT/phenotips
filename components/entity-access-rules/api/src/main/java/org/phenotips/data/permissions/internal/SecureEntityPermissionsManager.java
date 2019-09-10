@@ -21,12 +21,14 @@ import org.phenotips.data.permissions.AccessLevel;
 import org.phenotips.data.permissions.EntityAccess;
 import org.phenotips.data.permissions.EntityPermissionsManager;
 import org.phenotips.data.permissions.Visibility;
+import org.phenotips.data.permissions.events.EntityRightsUpdatedEvent.RightsUpdateEventType;
 import org.phenotips.entities.PrimaryEntity;
 
 import org.xwiki.component.annotation.Component;
 
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.List;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -127,5 +129,12 @@ public class SecureEntityPermissionsManager implements EntityPermissionsManager
     public void fireRightsUpdateEvent(@Nonnull final String entityId)
     {
         this.internalService.fireRightsUpdateEvent(entityId);
+    }
+
+    @Override
+    public void fireRightsUpdateEvent(@Nonnull final List<RightsUpdateEventType> eventTypes,
+        @Nonnull final String entityId)
+    {
+        this.internalService.fireRightsUpdateEvent(eventTypes, entityId);
     }
 }
