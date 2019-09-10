@@ -29,6 +29,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import javax.inject.Provider;
 
@@ -85,8 +86,7 @@ public class PhenoTipsGene implements Gene
     private String name;
 
     /**
-     * The gene status, one of possible values: "candidate" (default value), "rejected_candidate", "rejected", "solved",
-     * "carrier".
+     * The gene status, one of the values listed in the {@code status} property of {@code PhenoTips.GeneClass}.
      *
      * @see #getStatus()
      */
@@ -109,15 +109,36 @@ public class PhenoTipsGene implements Gene
 
     private Vocabulary hgnc;
 
-    private XWikiContext context;
+    static {
+        try {
+            Provider<XWikiContext> xcontextProvider =
+                ComponentManagerRegistry.getContextComponentManager().getInstance(XWikiContext.TYPE_PROVIDER);
+            XWikiContext context = xcontextProvider.get();
+            XWikiDocument doc = context.getWiki().getDocument(Gene.GENE_CLASS, context);
+            if (doc != null && !doc.isNew()) {
+                BaseClass gene = doc.getXClass();
+                if (gene != null) {
+                    StaticListClass statusProp = (StaticListClass) gene.get(STATUS_KEY);
+                    StaticListClass stategyProp = (StaticListClass) gene.get(STRATEGY_KEY);
+                    if (statusProp != null) {
+                        PhenoTipsGene.statusValues = statusProp.getList(context);
+                    }
+                    if (stategyProp != null) {
+                        PhenoTipsGene.strategyValues = stategyProp.getList(context);
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+    }
 
     /**
      * Constructor that receives all the needed data as parameters.
      *
      * @param id gene Ensembl ID
      * @param name gene HGNC vocabulary symbol
-     * @param status gene status, one of possible values: "candidate" (default value), "rejected_candidate", "rejected",
-     *            "solved"
+     * @param status gene status, one of the values listed in the {@code status} property of {@code PhenoTips.GeneClass}
      * @param strategy gene strategy
      * @param comment gene user inputed comment
      */
@@ -125,9 +146,6 @@ public class PhenoTipsGene implements Gene
     {
         if (StringUtils.isBlank(id) && StringUtils.isBlank(name)) {
             throw new IllegalArgumentException();
-        }
-        if (statusValues.size() == 0 || strategyValues.size() == 0) {
-            getProperties();
         }
         // gene ID is either the "id" field, or, if missing, the "gene" field
         String geneName = StringUtils.isNotBlank(id) ? id : name;
@@ -154,6 +172,16 @@ public class PhenoTipsGene implements Gene
             strategyArray.forEach(item -> strategies.add(item.toString()));
             this.setStrategy(strategies);
         }
+    }
+
+    /**
+     * Returns the values listed in the {@code status} property of {@code PhenoTips.GeneClass}.
+     *
+     * @return strategies values
+     */
+    public static List<String> getStatusValues()
+    {
+        return statusValues;
     }
 
     @Override
@@ -257,7 +285,12 @@ public class PhenoTipsGene implements Gene
      */
     public void setStrategy(Collection<String> strategies)
     {
-        this.strategy = strategies == null ? Collections.emptyList() : Collections.unmodifiableCollection(strategies);
+        this.strategy = strategies == null ? Collections.emptyList()
+            : Collections.unmodifiableCollection(strategies
+                .stream()
+                .map(item -> item.trim().toLowerCase())
+                .filter(item -> strategyValues.contains(item))
+                .collect(Collectors.toList()));
     }
 
     /**
@@ -320,39 +353,5 @@ public class PhenoTipsGene implements Gene
             this.logger.error("Error loading component [{}]", ex.getMessage(), ex);
         }
         return null;
-    }
-
-    private void getProperties()
-    {
-        XWikiDocument doc = getGeneXClassDoc();
-        if (doc == null || doc.isNew()) {
-            // Inaccessible or deleted document
-            return;
-        }
-        BaseClass gene = doc.getXClass();
-        if (gene == null) {
-            return;
-        }
-        StaticListClass statusProp = (StaticListClass) gene.get(STATUS_KEY);
-        StaticListClass stategyProp = (StaticListClass) gene.get(STRATEGY_KEY);
-        if (statusProp != null) {
-            statusValues = statusProp.getList(this.context);
-        }
-        if (stategyProp != null) {
-            strategyValues = stategyProp.getList(this.context);
-        }
-    }
-
-    private XWikiDocument getGeneXClassDoc()
-    {
-        Provider<XWikiContext> xcontextProvider = null;
-        try {
-            xcontextProvider =
-                ComponentManagerRegistry.getContextComponentManager().getInstance(XWikiContext.TYPE_PROVIDER);
-            this.context = xcontextProvider.get();
-            return this.context.getWiki().getDocument(Gene.GENE_CLASS, this.context);
-        } catch (Exception ex) {
-            return null;
-        }
     }
 }

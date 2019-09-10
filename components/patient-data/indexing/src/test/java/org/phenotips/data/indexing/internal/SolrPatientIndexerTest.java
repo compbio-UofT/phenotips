@@ -25,6 +25,7 @@ import org.phenotips.data.Patient;
 import org.phenotips.data.PatientData;
 import org.phenotips.data.PatientRepository;
 import org.phenotips.data.indexing.PatientIndexer;
+import org.phenotips.data.internal.PhenoTipsGene;
 import org.phenotips.data.permissions.EntityAccess;
 import org.phenotips.data.permissions.EntityPermissionsManager;
 import org.phenotips.data.permissions.Visibility;
@@ -91,8 +92,7 @@ public class SolrPatientIndexerTest
 {
     private static final String STATUS_KEY = "status";
 
-    private static final List<String> STATUS_VALUES = Arrays.asList("candidate", "rejected", "rejected_candidate",
-        "solved", "carrier");
+    private static final List<String> STATUS_VALUES = Arrays.asList("status1", "status>2", "status>3>1");
 
     @Rule
     public MockitoComponentMockingRule<PatientIndexer> mocker =
@@ -253,11 +253,9 @@ public class SolrPatientIndexerTest
         doReturn(Collections.EMPTY_SET).when(this.patient).getFeatures();
 
         List<Gene> fakeGenes = new LinkedList<>();
-        fakeGenes.add(mockGene("CANDIDATE1", "candidate"));
-        fakeGenes.add(mockGene("REJECTED1", "rejected"));
-        fakeGenes.add(mockGene("REJECTEDC1", "rejected_candidate"));
-        fakeGenes.add(mockGene("CARRIER1", "carrier"));
-        fakeGenes.add(mockGene("SOLVED1", "solved"));
+        fakeGenes.add(new PhenoTipsGene(null, "GENE1", "status1", null, null));
+        fakeGenes.add(new PhenoTipsGene(null, "GENE2", "status>2", null, null));
+        fakeGenes.add(new PhenoTipsGene(null, "GENE3", "status>3>1", null, null));
 
         PatientData<Gene> fakeGeneData =
             new IndexedPatientData<>("genes", fakeGenes);
@@ -271,25 +269,17 @@ public class SolrPatientIndexerTest
         verify(this.server).add(inputDoc);
 
         Collection<Object> indexedGenes;
-        indexedGenes = inputDoc.getFieldValues("candidate_genes");
+        indexedGenes = inputDoc.getFieldValues("status1_genes");
         Assert.assertEquals(1, indexedGenes.size());
-        Assert.assertEquals("CANDIDATE1", indexedGenes.iterator().next());
+        Assert.assertEquals("GENE1", indexedGenes.iterator().next());
 
-        indexedGenes = inputDoc.getFieldValues("solved_genes");
+        indexedGenes = inputDoc.getFieldValues("status>2_genes");
         Assert.assertEquals(1, indexedGenes.size());
-        Assert.assertEquals("SOLVED1", indexedGenes.iterator().next());
+        Assert.assertEquals("GENE2", indexedGenes.iterator().next());
 
-        indexedGenes = inputDoc.getFieldValues("rejected_genes");
+        indexedGenes = inputDoc.getFieldValues("status>3>1_genes");
         Assert.assertEquals(1, indexedGenes.size());
-        Assert.assertEquals("REJECTED1", indexedGenes.iterator().next());
-
-        indexedGenes = inputDoc.getFieldValues("rejected_candidate_genes");
-        Assert.assertEquals(1, indexedGenes.size());
-        Assert.assertEquals("REJECTEDC1", indexedGenes.iterator().next());
-
-        indexedGenes = inputDoc.getFieldValues("carrier_genes");
-        Assert.assertEquals(1, indexedGenes.size());
-        Assert.assertEquals("CARRIER1", indexedGenes.iterator().next());
+        Assert.assertEquals("GENE3", indexedGenes.iterator().next());
     }
 
     @Test
@@ -485,13 +475,5 @@ public class SolrPatientIndexerTest
         this.patientIndexer.reindex();
 
         verify(this.logger).warn("Failed to search patients for reindexing: {}", "createQuery failed");
-    }
-
-    private Gene mockGene(String id, String status)
-    {
-        Gene result = mock(Gene.class);
-        when(result.getId()).thenReturn(id);
-        when(result.getStatus()).thenReturn(status);
-        return result;
     }
 }
